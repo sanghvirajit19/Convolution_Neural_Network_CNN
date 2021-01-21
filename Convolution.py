@@ -261,7 +261,7 @@ class CNN:
 
     @staticmethod
     def flatten(x):
-        return x.reshape(x.shape[0] * x.shape[1] * x.shape[2], 1)
+        return x.reshape(x.shape[0], x.shape[1] * x.shape[2] * x.shape[3]).T
 
     def GaussianBlur_1(self):
         a = np.array([[1, 2, 1],
@@ -524,7 +524,7 @@ class CNN:
         self.w[index] -= (self.learning_rate / (np.sqrt(self.sdw[index]+1e-08))) * vdw_corr[index]
         self.b[index] -= (self.learning_rate / (np.sqrt(self.sdb[index]+1e-08))) * vdb_corr[index]
 
-    def feedforward(self, X_train, y_train, j):
+    def feedforward(self, j):
 
         global cost
         self.z = {}
@@ -603,8 +603,8 @@ class CNN:
 
         return update_params
 
-    def propogation(self, X_train, y_train, i):
-        self.z, self.a, self.output, self.loss = self.feedforward(X_train, y_train, i)
+    def propogation(self, i):
+        self.z, self.a, self.output, self.loss = self.feedforward(i)
         #self.update_params = self.backpropogation()
         return self.z, self.a, self.output, self.loss, #self.update_params
 
@@ -635,7 +635,7 @@ class CNN:
 
             for j in range(self.input.shape[1]):
 
-                self.z, self.a, self.output, self.loss = self.propogation(X_train, y_train, i)
+                self.z, self.a, self.output, self.loss = self.propogation(i)
 
                 if self.cost == 'CategoricalCrossEntropy':
                     probablity = self.output.T
@@ -801,227 +801,72 @@ class CNN:
 
         return recall
 
-    def conv2D(self, img, num_filters, Kernel_size=None, padding=None, stride=None, activation=None):
+    def X_flatten(self, X, window_h, window_w, window_c, out_h, out_w, stride=1, padding=0):
+        X_padded = np.pad(X, ((0, 0), (padding, padding), (padding, padding), (0, 0)), 'constant', constant_values=0)
 
-        self.filters = []
+        windows = []
+        for i in range(out_h):
+            for j in range(out_w):
+                window = X_padded[:, i * stride:i * stride + window_h, j * stride:j * stride + window_w, :]
+                windows.append(window)
+        stacked = np.stack(windows)  # shape : [out_h, out_w, n, filter_h, filter_w, c]
 
-        kernel_dim = Kernel_size[0]
+        return np.reshape(stacked, (-1, window_c * window_w * window_h))
 
-        for i in range(num_filters):
-            kernel = np.random.randn(kernel_dim, kernel_dim) / 9
-            self.filters.append(kernel)
+    def convolution(self, X, n_filters, kernel_size, padding, stride, activation=None):
 
-        k_l = Kernel_size[0]
-        k_h = Kernel_size[1]
+        global conv_activation_layer
+        k_h = kernel_size[0]
+        k_w = kernel_size[1]
 
-        if padding == 'SAME':
-
-            s = 1
-
-            if stride == None:
-                s = 1
-
-            if s != 1:
-                raise Exception("Please change the stride to 1 with SAME padding")
-
-            # Zero Padding
-            pad = (k_l - 1) // 2
-            total_pad = 2 * pad
-
-            dim = int(((img.shape[0] - k_l + 2 * pad) // s) + 1)
-            padded_image = np.zeros((dim + 2*pad, dim + 2*pad))
-
-            padded_image[pad:-pad, pad:-pad] = img
-
-            output_image = np.zeros((img.shape[0], img.shape[1], num_filters))
-
-            a = 0
-            b = 0
-            for k in range(num_filters):
-                filter = self.filters[k]
-                filter = np.flipud(np.fliplr(filter))
-                for i in range(padded_image.shape[0] - total_pad):
-                    for j in range(padded_image.shape[1] - total_pad):
-                        output_image[i, j, k] = np.multiply(filter, padded_image[i+a: i+a + k_l, j+b: j+b + k_h]).sum()
-                        b = b + s - 1
-                    b = 0
-                    a = a + s - 1
-                a = 0
-                b = 0
-
-        else:
-            p = 0
-
-            if stride == None:
-                s = 1
-            else:
-                s = stride
-
-            dim = int(((img.shape[0] - k_l + 2 * p) // s) + 1)
-            output_image = np.zeros((dim, dim, num_filters))
-
-            a = 0
-            b = 0
-            for k in range(num_filters):
-                filter = self.filters[k]
-                filter = np.flipud(np.fliplr(filter))
-                for i in range(output_image.shape[0]):
-                    for j in range(output_image.shape[1]):
-                        output_image[i, j, k] = np.multiply(filter, img[i+a: i+a + k_l, j+b: j+b + k_h]).sum()
-                        b = b + s - 1
-                    b = 0
-                    a = a + s - 1
-                a = 0
-                b = 0
-
-        if activation == 'relu':
-            output_image = relu.activation(output_image)
-
-        return output_image
-
-    def Maxpooling2D(self, img, pool_size=None, stride=None):
-
-        if stride == None:
-            s = 1
-        else:
-            s = stride
-
-        pad = 0
-        pool_dim = pool_size[0]
-
-        output_dim = int(((img.shape[0] - pool_dim + 2 * pad) // s) + 1)
-        output_image = np.zeros((output_dim, output_dim, img.shape[2]))
-
-        a = 0
-        b = 0
-        for k in range(img.shape[2]):
-            image = img[:, :, k]
-            for i in range(output_image.shape[0]):
-                for j in range(output_image.shape[1]):
-                    output_image[i, j, k] = image[i + a: i + a + pool_dim, j + b: j + b + pool_dim].max()
-                    b = b + s - 1
-                b = 0
-                a = a + s - 1
-            a = 0
-            b = 0
-        return output_image
-
-    def conv3D(self, img, num_filters, Kernel_size=None, padding=None, stride=None, activation=None):
-
-        self.filters = []
-
-        kernel_dim = Kernel_size[0]
-
-        for i in range(num_filters):
-            kernel = np.random.randn(img.shape[2], kernel_dim, kernel_dim)
-            kernel = kernel.reshape((kernel_dim, kernel_dim, img.shape[2]))
-            self.filters.append(kernel)
-
-        if Kernel_size == None:
-            kernel_dim = 3
-        else:
-            kernel_dim = Kernel_size[0]
-
-        k_l = Kernel_size[0]
-        k_h = Kernel_size[1]
-
-        if padding == 'SAME':
-
-            s = 1
-
-            if stride == None:
-                s = 1
-
-            if s != 1:
-                raise Exception("Please change the stride to 1 with SAME padding")
-
-            pad = (k_l - 1) // 2
-            total_pad = 2 * pad
-
-            dim = int(((img.shape[0] - k_l + 2 * pad) // s) + 1)
-
-            padded_image = np.zeros((dim + 2*pad, dim + 2*pad, img.shape[2]))
-            padded_image[pad:-pad, pad:-pad, :] = img
-
-            padded_image = padded_image.reshape((dim + 2*pad, dim + 2*pad, img.shape[2]))
-
-            l, h, d = img.shape
-            output_image = np.zeros((l, h, num_filters))
-
-            a = 0
-            b = 0
-            for k in range(num_filters):
-                filter = self.filters[k]
-                filter = np.flipud(np.fliplr(filter))
-                for i in range(padded_image.shape[0] - total_pad):
-                    for j in range(padded_image.shape[1] - total_pad):
-                        output_image[i, j, k] = np.multiply(filter, padded_image[i+a: i+a + k_l, j+b: j+b + k_h, :]).sum()
-                        b = b + s - 1
-                    b = 0
-                    a = a + s - 1
-                a = 0
-                b = 0
-
-        else:
+        if padding == 'VALID':
             pad = 0
+        else:
+            pad = 1
 
-            if stride == None:
-                s = 1
-            else:
-                s = stride
+        filters = []
+        for i in range(n_filters):
+            kernel = np.random.randn(k_h, k_w, X.shape[3])
+            filters.append(kernel)
+        kernel = np.reshape(filters, (k_h, k_w, X.shape[3], n_filters))
 
-            dim = int(((img.shape[0] - k_l + 2 * pad) // s) + 1)
+        n, h, w, c = X.shape[0], X.shape[1], X.shape[2], X.shape[3]
+        filter_h, filter_w, filter_c, filter_n = kernel.shape[0], kernel.shape[1], kernel.shape[2], kernel.shape[3]
 
-            output_image = np.zeros((dim, dim, num_filters))
+        out_h = (h + 2 * pad - filter_h) // stride + 1
+        out_w = (w + 2 * pad - filter_w) // stride + 1
 
-            img = img.reshape((img.shape[0], img.shape[1], img.shape[2]))
+        X_flat = model.X_flatten(X, filter_h, filter_w, filter_c, out_h, out_w, stride, pad)
+        W_flat = np.reshape(kernel, (filter_h * filter_w * filter_c, filter_n))
 
-            a = 0
-            b = 0
-            for k in range(num_filters):
-                filter = self.filters[k]
-                filter = np.flipud(np.fliplr(filter))
-                for i in range(output_image.shape[0]):
-                    for j in range(output_image.shape[1]):
-                        output_image[i, j, k] = np.multiply(filter, img[i+a: i+a + k_l, j+b: j+b + k_h, :]).sum()
-                        b = b + s - 1
-                    b = 0
-                    a = a + s - 1
-                a = 0
-                b = 0
+        z = np.matmul(X_flat, W_flat)
+        z = np.transpose(np.reshape(z, (out_h, out_w, n, filter_n)), (2, 0, 1, 3))
 
         if activation == 'relu':
-            output_image = relu.activation(output_image)
+            conv_activation_layer = relu.activation(z)
 
-        return output_image
+        return conv_activation_layer
 
-    def Maxpooling3D(self, img, pool_size=None, stride=None):
+    def max_pool(self, X, pool_size, padding, stride):
 
-        if stride == None:
-            s = 1
+        pool_h = pool_size[0]
+        pool_w = pool_size[1]
+
+        if padding == 'VALID':
+            pad = 0
         else:
-            s = stride
+            pad = 1
 
-        pad = 0
-        pool_dim = pool_size[0]
+        n, h, w, c = X.shape[0], X.shape[1], X.shape[2], X.shape[3]
 
-        output_dim = int(((img.shape[0] - pool_dim + 2 * pad) // s) + 1)
-        output_image = np.zeros((output_dim, output_dim, img.shape[2]))
+        out_h = (h + 2 * pad - pool_h) // stride + 1
+        out_w = (w + 2 * pad - pool_w) // stride + 1
 
-        a = 0
-        b = 0
-        for k in range(img.shape[2]):
-            image = img[:, :, k]
-            for i in range(output_image.shape[0]):
-                for j in range(output_image.shape[1]):
-                    output_image[i, j, k] = image[i + a: i + a + pool_dim, j + b: j + b + pool_dim].max()
-                    b = b + s - 1
-                b = 0
-                a = a + s - 1
-            a = 0
-            b = 0
+        X_flat = model.X_flatten(X, pool_h, pool_w, c, out_h, out_w, stride, pad)
 
-        return output_image
+        pool = np.max(np.reshape(X_flat, (out_h, out_w, n, pool_h * pool_w, c)), axis=3)
+
+        return np.transpose(pool, (2, 0, 1, 3))
 
 if __name__ == '__main__':
 
@@ -1036,28 +881,42 @@ if __name__ == '__main__':
     y_train = tensorflow.keras.utils.to_categorical(y_train, 10).T
     y_test = tensorflow.keras.utils.to_categorical(y_test, 10).T
 
-    input_image = X_train[0]
+    X_train = X_train.reshape((60000, 28, 28, 1))
+
+    training = X_train[:5000]
+    y_train = y_train[:, :5000]
+
+    print(training.shape)
 
     model = CNN()
 
-    Layer_1 = model.conv2D(input_image, num_filters=32, Kernel_size=(3, 3), padding='VALID', stride=1, activation='relu')
+    Layer_1 = model.convolution(training, n_filters=6, kernel_size=(5, 5), padding='VALID', stride=1, activation='relu')
 
-    #print(Layer_1.shape)
+    print(Layer_1.shape)
 
-    Layer_2 = model.Maxpooling2D(Layer_1, pool_size=(2, 2), stride=2)
+    Layer_2 = model.max_pool(Layer_1, pool_size=(2, 2), padding='VALID', stride=2)
 
-    #print(Layer_2.shape)
+    print(Layer_2.shape)
 
-    layer_3 = model.flatten(Layer_2)
+    Layer_3 = model.convolution(Layer_2, n_filters=16, kernel_size=(5, 5), padding='VALID', stride=1, activation='relu')
 
-    #print(layer_3.shape)
+    print(Layer_3.shape)
 
-    model.add_layer(50, activation='relu')
+    Layer_4 = model.max_pool(Layer_3, pool_size=(2, 2), padding='VALID', stride=2)
+
+    print(Layer_4.shape)
+
+    Layer_5 = model.flatten(Layer_4)
+
+    print(Layer_5.shape)
+
+    model.add_layer(120, activation='relu')
     model.add_layer(10, activation='softmax')
 
     model.complile(loss='CategoricalCrossEntropy', initialization='He', optimizer='Adam')
     model.GDScheduler(lr=0.001)
 
+    ##X_train = (x*y, m), y_train = (10, m)
     start = timeit.default_timer()
-    model.fit(layer_3, y_train[:, 0], epochs=1)
+    model.fit(Layer_5, y_train, epochs=1)
     stop = timeit.default_timer()
