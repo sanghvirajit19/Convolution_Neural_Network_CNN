@@ -256,79 +256,16 @@ class CNN:
         self.neurons = []
         self.activations = {}
         self.layers = 0
-        self.activationMean = []
-        self.gradientMean = []
 
     @staticmethod
     def flatten(x):
         return x.reshape(x.shape[0], x.shape[1] * x.shape[2] * x.shape[3]).T
 
-    def GaussianBlur_1(self):
-        a = np.array([[1, 2, 1],
-                      [2, 4, 2],
-                      [1, 2, 1]])
-        k = a / np.sum(a)
-        return k
-
-    def edge_detection(self):
-        a = np.array([[1, 0, -1],
-                      [0, 0, 0],
-                      [-1, 0, 1]])
-        return a
-
-    def sharpen(self):
-        a = np.array([[0, -1, 0],
-                      [-1, 5, -1],
-                      [0, -1, 0]])
-        return a
-
-    def GaussianBlur_2(self):
-        a = (1 / 256) * np.array([[1, 4, 6, 4, 1],
-                                  [4, 16, 24, 16, 4],
-                                  [6, 24, 36, 24, 6],
-                                  [4, 16, 24, 16, 4],
-                                  [1, 4, 6, 4, 1]])
-        return a
-
-    def sobel_edge_1(self):
-        a = np.array([[-1, -2, -1],
-                      [0, 0, 0],
-                      [1, 2, 1]])
-        return a
-
-    def sobel_edge_2(self):
-        a = np.array([[-1, -2, -1],
-                      [0, 0, 0],
-                      [1, 2, 1]]).T
-        return a
-
-    def laplacian(self):
-        a = np.array([[0, -1, 0],
-                      [-1, 4, -1],
-                      [0, -1, 0]])
-        return a
-
-    def Laplacian_of_Gaussian(self):
-        a = np.array([[0, 0, -1, 0, 0],
-                      [0, -1, -2, -1, 0],
-                      [-1, -2, 16, -2, -1],
-                      [0, -1, -2, -1, 0],
-                      [0, 0, -1, 0, 0]])
-        return a
-
-    def add_layer(self, neurons, activation):
+    def Dense(self, neurons, activation):
         self.neurons.append(neurons)
         self.layers += 1
 
         self.activations[self.layers] = activation
-
-        for i in range(self.layers):
-            array = []
-            self.activationMean.append(array)
-
-        for i in range(self.layers):
-            array = []
-            self.gradientMean.append(array)
 
     def num_layers(self):
         return print('Total number of layers: ' + str(self.layers))
@@ -352,6 +289,19 @@ class CNN:
         self.initialization = initialization
         self.optimizer = optimizer
 
+    def initialize(self, input, layers):
+
+        if self.initialization == 'Xavier':
+            w, b, sdw, sdb, vdw, vdb = Initialization.Xavier(input, layers)
+        elif self.initialization == 'He':
+            w, b, sdw, sdb, vdw, vdb = Initialization.He(input, layers)
+        elif self.initialization == 'Kumar':
+            w, b, sdw, sdb, vdw, vdb = Initialization.Kumar(input, layers)
+        else:
+            w, b, sdw, sdb, vdw, vdb = Initialization.Zeros(input, layers)
+
+        return w, b, sdw, sdb, vdw, vdb
+
     def acc(self, y_true, y_predicted, cost):
         if cost == 'BinaryCrossEntropy':
             accuracy = np.mean(np.equal(y_true, np.round(y_predicted))) * 100
@@ -359,117 +309,8 @@ class CNN:
             accuracy = np.mean(np.equal(np.argmax(y_true, axis=-1), np.argmax(y_predicted, axis=-1))) * 100
         return accuracy
 
-    def activation_mean(self):
-
-        x = np.arange(1, model.epochs + 1)
-
-        for i in range(0, self.layers):
-            layer = self.activationMean[i]
-            plt.plot(x, layer, label="Layer {}".format(i + 1))
-
-        # plt.ylim(0.1, 0.9)
-        plt.xlabel('epochs')
-        plt.ylabel('Activation mean')
-        plt.legend(loc='upper right')
-
-        fig1 = plt.gcf()
-        plt.show()
-        fig1.savefig('activation_mean.png')
-
-    def activation_distribution(self):
-
-        global x1, x2
-
-        if self.activations[1] == 'sigmoid':
-            x1 = 0
-            x2 = 1
-
-        if self.activations[1] == 'tanh':
-            x1 = -1
-            x2 = 1
-
-        for i in range(self.layers):
-            mu, sigma = norm.fit(self.a[i + 1])
-            dist = norm(mu, sigma)
-            values = np.linspace(x1, x2, 500)
-            probabilities = [dist.pdf(value) for value in values]
-            plt.plot(values, probabilities, label="Layer {}".format(i + 1))
-
-        plt.xlabel('Activation Value')
-        plt.legend(loc='upper right')
-
-        fig1 = plt.gcf()
-        plt.show()
-        fig1.savefig('activation_distribution.png')
-
-    def z_distribution(self):
-
-        for i in range(self.layers):
-            mu, sigma = norm.fit(self.z[i + 1])
-            dist = norm(mu, sigma)
-            values = np.linspace(-2, 2, 500)
-            probabilities = [dist.pdf(value) for value in values]
-            plt.plot(values, probabilities, label="Layer {}".format(i + 1))
-
-        plt.xlabel('Z Distribution')
-        plt.legend(loc='upper right')
-
-        fig1 = plt.gcf()
-        plt.show()
-        fig1.savefig('Z_Distribution.png')
-
-    def backpropogation_gradients_distribution(self):
-
-        weight_gradients = self.update_params
-
-        for i in range(1, self.layers + 1):
-            an_array = weight_gradients[i][0]
-            norm_ = np.linalg.norm(an_array)
-            update_params = an_array / norm_
-
-            mu, sigma = norm.fit(update_params)
-            dist = norm(mu, sigma)
-            values = np.linspace(-0.2, 0.2, 100)
-            probabilities = [dist.pdf(value) for value in values]
-            plt.plot(values, probabilities, label="Layer {}".format(i))
-
-        plt.xlabel('Backpropogation gradients')
-        plt.legend(loc='upper right')
-
-        fig1 = plt.gcf()
-        plt.show()
-        fig1.savefig('backpropogation_distribution.png')
-
-    def gradient_mean(self):
-
-        x = np.arange(1, model.epochs + 1)
-
-        for i in range(0, self.layers):
-            layer = self.gradientMean[i]
-            plt.plot(x, layer, label="Layer {}".format(i + 1))
-
-        plt.ylim(-0.00001, 0.0001)
-        plt.xlabel('epochs')
-        plt.ylabel('gradient mean')
-        plt.legend(loc='upper right')
-
-        fig1 = plt.gcf()
-        plt.show()
-        fig1.savefig('backpropogation_mean.png')
-
-    def GDScheduler(self, lr, momemtum=None, decay=None, method=None):
+    def GDScheduler(self, lr):
         self.learning_rate = lr
-        self.decay = decay
-        self.momemtum = momemtum
-
-        if method == None:
-            self.decaymethod = 'None'
-
-        if method == 'exponential':
-            self.decaymethod = 'exp_decay'
-
-        if method == 'timebased':
-            self.decaymethod = 'time_based_decay'
 
     def GD(self, index, dw, db):
 
@@ -524,24 +365,13 @@ class CNN:
         self.w[index] -= (self.learning_rate / (np.sqrt(self.sdw[index]+1e-08))) * vdw_corr[index]
         self.b[index] -= (self.learning_rate / (np.sqrt(self.sdb[index]+1e-08))) * vdb_corr[index]
 
-    def feedforward(self, j):
+    def feedforward(self):
 
         global cost
         self.z = {}
         self.a = {}
 
         self.a = {0: self.input}
-
-        # Initialize parameters
-        if j == 0:
-            if self.initialization == 'Xavier':
-                self.w, self.b, self.sdw, self.sdb, self.vdw, self.vdb = Initialization.Xavier(self.input, self.layers)
-            elif self.initialization == 'He':
-                self.w, self.b, self.sdw, self.sdb, self.vdw, self.vdb = Initialization.He(self.input, self.layers)
-            elif self.initialization == 'Kumar':
-                self.w, self.b, self.sdw, self.sdb, self.vdw, self.vdb = Initialization.Kumar(self.input, self.layers)
-            else:
-                self.w, self.b, self.sdw, self.sdb, self.vdw, self.vdb = Initialization.Zeros(self.input, self.layers)
 
         # CostFunction
         if self.cost == 'BinaryCrossEntropy':
@@ -553,7 +383,6 @@ class CNN:
         for i in range(0, self.layers):
             self.z[i + 1] = np.dot(self.w[i + 1].T, self.a[i]) + self.b[i + 1]
             self.a[i + 1] = eval(self.activations[i + 1]).activation(self.z[i + 1])
-            self.activationMean[i].append(self.a[i + 1].mean())
 
         self.output = self.a[self.layers]
 
@@ -571,8 +400,6 @@ class CNN:
             self.layers: (dw, db)
         }
 
-        self.gradientMean[self.layers - 1].append(abs(dw.mean()))
-
         for i in reversed(range(1, self.layers)):
             delta = np.dot(self.w[i + 1].T.T, delta) * eval(self.activations[i]).prime(self.z[i])
             dw = (1 / self.m) * np.dot(delta, self.a[i - 1].T).T
@@ -580,9 +407,6 @@ class CNN:
 
             # Storing dw and db
             update_params[i] = (dw, db)
-
-            # Storing gradient mean values
-            self.gradientMean[i - 1].append(abs(dw.mean()))
 
         # Optimizer
         if self.optimizer == 'GD':
@@ -603,8 +427,8 @@ class CNN:
 
         return update_params
 
-    def propogation(self, i):
-        self.z, self.a, self.output, self.loss = self.feedforward(i)
+    def propogation(self):
+        self.z, self.a, self.output, self.loss = self.feedforward()
         #self.update_params = self.backpropogation()
         return self.z, self.a, self.output, self.loss, #self.update_params
 
@@ -615,27 +439,18 @@ class CNN:
         self.m = X_train.shape[1]
         self.epochs = epochs
 
+        self.w, self.b, self.sdw, self.sdb, self.vdw, self.vdb = model.initialize(self.input, self.layers)
+
         print("Training........")
         for i in range(self.epochs):
 
             self.currentepoch = i
 
-            if self.decaymethod == 'None':
-                pass
-
-            if self.decaymethod == 'exp_decay':
-                self.learning_rate = Learning_Rate_Schedules.exp_decay(self.learning_rate, self.decay,
-                                                                       self.currentepoch)
-
-            if self.decaymethod == 'time_based_decay':
-                self.learning_rate = Learning_Rate_Schedules.time_based_decay(self.learning_rate, self.decay,
-                                                                              self.currentepoch)
-
             start = timeit.default_timer()
 
             for j in range(self.input.shape[1]):
 
-                self.z, self.a, self.output, self.loss = self.propogation(i)
+                self.z, self.a, self.output, self.loss = self.propogation()
 
                 if self.cost == 'CategoricalCrossEntropy':
                     probablity = self.output.T
@@ -910,13 +725,9 @@ if __name__ == '__main__':
 
     print(Layer_5.shape)
 
-    model.add_layer(120, activation='relu')
-    model.add_layer(10, activation='softmax')
+    model.Dense(10, activation='softmax')
 
     model.complile(loss='CategoricalCrossEntropy', initialization='He', optimizer='Adam')
     model.GDScheduler(lr=0.001)
 
-    ##X_train = (x*y, m), y_train = (10, m)
-    start = timeit.default_timer()
     model.fit(Layer_5, y_train, epochs=1)
-    stop = timeit.default_timer()
