@@ -625,6 +625,7 @@ class CNN:
                 window = X_padded[:, i * stride:i * stride + window_h, j * stride:j * stride + window_w, :]
                 windows.append(window)
         stacked = np.stack(windows)  # shape : [out_h, out_w, n, filter_h, filter_w, c]
+        print(stacked.shape)
 
         return np.reshape(stacked, (-1, window_c * window_w * window_h))
 
@@ -678,9 +679,7 @@ class CNN:
         out_w = (w + 2 * pad - pool_w) // stride + 1
 
         X_flat = model.X_flatten(X, pool_h, pool_w, c, out_h, out_w, stride, pad)
-
         pool = np.max(np.reshape(X_flat, (out_h, out_w, n, pool_h * pool_w, c)), axis=3)
-
         return np.transpose(pool, (2, 0, 1, 3))
 
 if __name__ == '__main__':
@@ -705,13 +704,32 @@ if __name__ == '__main__':
 
     model = CNN()
 
-    Layer_1 = model.convolution(training, n_filters=6, kernel_size=(5, 5), padding='VALID', stride=1, activation='relu')
+    start = timeit.default_timer()
+    Layer_1 = model.convolution(training, n_filters=32, kernel_size=(3, 3), padding='VALID', stride=1, activation='relu')
+    end = timeit.default_timer()
 
     print(Layer_1.shape)
+    print("Run time {} s".format(end-start))
+
+    plt.figure(figsize=(30, 30))
+
+    for i in range(32):
+        plt.subplot(6, 6, i+1)
+        plt.imshow(Layer_1[0, :, :, i], cmap='Greys')
+
+    plt.show()
 
     Layer_2 = model.max_pool(Layer_1, pool_size=(2, 2), padding='VALID', stride=2)
 
     print(Layer_2.shape)
+
+    plt.figure(figsize=(30, 30))
+
+    for i in range(32):
+        plt.subplot(6, 6, i + 1)
+        plt.imshow(Layer_2[0, :, :, i], cmap='Greys')
+
+    plt.show()
 
     Layer_3 = model.convolution(Layer_2, n_filters=16, kernel_size=(5, 5), padding='VALID', stride=1, activation='relu')
 

@@ -401,12 +401,12 @@ if __name__ == '__main__':
 
     model = sequential()
 
-    layer1 = model.add(layers.Dense(784, 50, activation='relu', initialization='He'))
-    layer2 = model.add(layers.Dense(50, 10, activation='softmax', initialization='He'))
+    model.add(layers.Dense(784, 120, activation='relu', initialization='He'))
+    model.add(layers.Dense(120, 10, activation='softmax', initialization='He'))
 
-    model.compile(loss='CategoricalCrossEntropy', optimizer='RMSprop')
+    model.compile(loss='CategoricalCrossEntropy', optimizer='Adam')
     model.GDScheduler(lr=0.01)
-    model.fit(X_train, y_train, batch_size=5000, epochs=50)
+    model.fit(X_train, y_train, batch_size=5000, epochs=100)
 
     y_predicted = model.predict(X_test)
 
